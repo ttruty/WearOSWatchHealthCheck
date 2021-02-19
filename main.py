@@ -19,7 +19,6 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 # D:\HABitsLab\WristDataChecks\output
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-SAMPLE_RATE = 20
 
 def main():
     """
@@ -30,16 +29,13 @@ def main():
     parser.add_argument('input', metavar='input', type=str,
                         help='directory path for input')
 
-    parser.add_argument('output', metavar='output', type=str,
-                        help='directory path for output')
-
     parser.add_argument('participant', metavar='part_id', type=str,
                         help='participant id')
 
-    parser.add_argument('port', metavar='port', type=str, nargs='?', const="8050",
+    parser.add_argument('port', metavar='port', type=str, nargs='?', const="8050", default="8050",
                         help='port number to serve plotly')
 
-    parser.add_argument('rate', metavar='rate', type=int, nargs='?', const=20,
+    parser.add_argument('rate', metavar='rate', type=int, nargs='?', const=20, default=20,
                         help='sample rate of device')
 
     # parse command line arguments
@@ -52,11 +48,14 @@ def main():
     download_path = os.path.join(args.input, args.participant)
     download_data.download_data(args.participant, download_path)
     #preprocess data into single file
-    preprocessing.preprocess_data(args.participant, args.input, args.output)
+    output_path = os.path.join(args.input, "output")
+    preprocessing.preprocess_data(args.participant, args.input, output_path)
 
     #load wrist data
-    wrist_directory = os.path.join(args.output, args.participant)
+    wrist_directory = os.path.join(output_path, args.participant)
+    print(wrist_directory)
     for dirpath, _, filenames in os.walk(wrist_directory):
+        print(filenames)
         accel_files = [f for f in filenames if 'Accel' in f]
         gyro_files = [f for f in filenames if 'Gyro' in f]
         ppg_files = [f for f in filenames if 'PPG' in f]
@@ -71,7 +70,7 @@ def main():
         count += 1
         if count == 1:
             sensor_name = "Accel"
-            get_wear(args.participant) # get wear time only from accel, only need 1 sensor
+            get_wear(args.participant, output_path) # get wear time only from accel, only need 1 sensor
         elif count == 2:
             sensor_name = "Gyro"
         elif count == 3:
@@ -84,8 +83,8 @@ def main():
         # only calculate reliability with values from data, not interpolated for gaps
         pd.set_option('mode.chained_assignment', None)  # turn off warning for chained assignment. does not need saving
         recordedDataDf = countDf.loc[countDf['Interpolated'] == 0]
-        recordedDataDf.loc[recordedDataDf["SampleCounts"] > SAMPLE_RATE, "SampleCounts"] = SAMPLE_RATE
-        recordedDataDf['Reliability'] = recordedDataDf['SampleCounts'] / SAMPLE_RATE
+        recordedDataDf.loc[recordedDataDf["SampleCounts"] > args.rate, "SampleCounts"] = args.rate
+        recordedDataDf['Reliability'] = recordedDataDf['SampleCounts'] / args.rate
         reliability_dict[sensor_name] = recordedDataDf["Reliability"].mean()
         #
         countDf['Time'] = pd.to_datetime(countDf['Time'], unit='s')

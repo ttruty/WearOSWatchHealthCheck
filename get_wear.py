@@ -9,18 +9,18 @@ from collections import Counter
 PARTICIPANT = 502
 
 
-def get_wear(participant):
+def get_wear(participant, file_path):
 #load wrist data
     timestampCol = 1
-    wrist_directory = r"D:\HABitsLab\WristDataChecks\output\{}".format(participant)
+    wrist_directory = os.path.join(file_path, participant)
+
     for dirpath, _, filenames in os.walk(wrist_directory):
         accel_files = [f for f in filenames if 'Accel' in f]
 
-    #print(accel_files)
     df = pd.read_csv(os.path.join(wrist_directory, accel_files[0]), engine='python')
 
     timeArr = df.iloc[:, 0].values
-    reliabDf = calc_reliability(timeArr, "second", wrist_directory, plot=0)
+    reliabDf = calc_reliability(timeArr, "second", os.path.join(wrist_directory, accel_files[0]), plot=0)
     reliabDf['Time'] = pd.to_datetime(reliabDf['Time'], unit='s')
     reliabDf['Time'] = reliabDf['Time'].dt.tz_localize('UTC').dt.tz_convert('America/Chicago')
 
