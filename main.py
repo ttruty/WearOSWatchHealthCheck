@@ -2,6 +2,8 @@
 
 
 import os
+
+import check_non_wear_time
 from calc_reliabilitly import calc_reliability
 import dash
 import dash_core_components as dcc
@@ -20,41 +22,41 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
-def main():
+
+# parse command line arguments
+parser = argparse.ArgumentParser(description='Process wrist data from wear os watch.')
+
+parser.add_argument('input', metavar='input', type=str,
+                    help='directory path for input')
+
+parser.add_argument('participant', metavar='part_id', type=str,
+                    help='participant id')
+
+parser.add_argument('port', metavar='port', type=str, nargs='?', const="8050", default="8050",
+                    help='port number to serve plotly')
+
+parser.add_argument('rate', metavar='rate', type=int, nargs='?', const=20, default=20,
+                    help='sample rate of device')
+
+
+def main(args):
     """
     Application entry point responsible for parsing command line requests
+    exaple command : python main.py D:\HABitsLab\WristDataChecks 511
     """
-    parser = argparse.ArgumentParser(description='Process wrist data from wear os watch.')
-
-    parser.add_argument('input', metavar='input', type=str,
-                        help='directory path for input')
-
-    parser.add_argument('participant', metavar='part_id', type=str,
-                        help='participant id')
-
-    parser.add_argument('port', metavar='port', type=str, nargs='?', const="8050", default="8050",
-                        help='port number to serve plotly')
-
-    parser.add_argument('rate', metavar='rate', type=int, nargs='?', const=20, default=20,
-                        help='sample rate of device')
-
-    # parse command line arguments
-    args = parser.parse_args()
-
 
     reliability_dict = {}
 
     #download only new data
-    download_path = os.path.join(args.input, args.participant)
+    download_path = os.path.join(args.input)
     download_data.download_data(args.participant, download_path)
     #preprocess data into single file
-    output_path = os.path.join(args.input, "output")
-    preprocessing.preprocess_data(args.participant, args.input, output_path)
+    output_path = os.path.join(args.input, "../OutputCheck")
+    preprocessing.preprocess_data(args.input, output_path, args.participant)
 
     #load wrist data
-    wrist_directory = os.path.join(output_path, args.participant)
-    print(wrist_directory)
-    for dirpath, _, filenames in os.walk(wrist_directory):
+    print(output_path)
+    for dirpath, _, filenames in os.walk(output_path):
         print(filenames)
         accel_files = [f for f in filenames if 'Accel' in f]
         gyro_files = [f for f in filenames if 'Gyro' in f]
@@ -76,32 +78,37 @@ def main():
         elif count == 3:
             sensor_name = "PPG"
 
-        df = pd.read_csv(os.path.join(wrist_directory, csv_files), engine='python')
+        df = pd.read_csv(os.path.join(output_path, csv_files), engine='python')
         timeArr = df.iloc[:,0].values
-        countDf = calc_reliability(timeArr, "second", wrist_directory, plot=0)
+        countDf = calc_reliability(timeArr, "second", output_path, plot=0)
 
-        # only calculate reliability with values from data, not interpolated for gaps
-        pd.set_option('mode.chained_assignment', None)  # turn off warning for chained assignment. does not need saving
-        recordedDataDf = countDf.loc[countDf['Interpolated'] == 0]
-        recordedDataDf.loc[recordedDataDf["SampleCounts"] > args.rate, "SampleCounts"] = args.rate
-        recordedDataDf['Reliability'] = recordedDataDf['SampleCounts'] / args.rate
-        reliability_dict[sensor_name] = recordedDataDf["Reliability"].mean()
-        #
+        #get non wear time where sample count = 0 for greater than 30 minutes
+        non_wear_timestamps = check_non_wear_time.non_wear(countDf)
+
+        #convert timestamps to local time
         countDf['Time'] = pd.to_datetime(countDf['Time'], unit='s')
         countDf['Time'] = countDf['Time'].dt.tz_localize('UTC').dt.tz_convert('America/Chicago')
 
-        # Reliability on plot
-        # countDf.loc[countDf["SampleCounts"] > SAMPLE_RATE, "SampleCounts"] = SAMPLE_RATE
-        # countDf['Reliability'] = countDf['SampleCounts'] / SAMPLE_RATE
-        # reliability_dict[sensor_name] = countDf["Reliability"].mean()
-        #
-        # countDf['Time'] = pd.to_datetime(countDf['Time'], unit='s')
-        # countDf['Time'] = countDf['Time'].dt.tz_localize('UTC').dt.tz_convert('America/Chicago')
+        # only calculate reliability with values from data, not interpolated for gaps
+        pd.set_option('mode.chained_assignment', None)  # turn off warning for chained assignment. does not need saving
+
+        # only capture wear periods for reliabilty score
+        recordedDataDf = countDf
+        for index, non_wear_segment in non_wear_timestamps.iterrows():
+            recordedDataDf = recordedDataDf[(recordedDataDf['Time'] < non_wear_segment["Start"]) | (recordedDataDf['Time'] > non_wear_segment["Stop"])]
+        # recordedDataDf = countDf.loc[countDf['Interpolated'] == 0]
+
+        recordedDataDf.loc[recordedDataDf["SampleCounts"] > args.rate, "SampleCounts"] = args.rate
+        recordedDataDf['Reliability'] = recordedDataDf['SampleCounts'] / args.rate
+        reliability_dict[sensor_name] = recordedDataDf["Reliability"].mean()
+
+
 
         fig = px.line(countDf, x="Time", y="SampleCounts")
         figures.append(
             html.Div([
                 html.H1(children='{} for {}'.format(sensor_name, args.participant)),
+                html.H3(children="Reliability Average: {}".format(reliability_dict[sensor_name])),
                 dcc.Graph(
                     id='graph{}'.format(count),
                     figure=fig
@@ -114,4 +121,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # sys.argv = ['main.py', 'D:\\HABitsLab\\WristDataChecks\\511', '511']
+    args = parser.parse_args()
+    main(args)

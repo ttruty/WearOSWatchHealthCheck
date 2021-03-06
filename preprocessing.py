@@ -17,11 +17,7 @@ def clean_and_sort(df):
     return df
 
 
-def preprocess_data(participant, input_path, output_path):
-    wrist_directory = os.path.join(input_path, participant)
-      #  r"D:\HABitsLab\WristDataChecks\{}".format(participant)
-    save_directory = os.path.join(output_path, participant)
-
+def preprocess_data(wrist_directory, save_directory, participant):
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
 
