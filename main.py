@@ -51,7 +51,7 @@ def main(args):
     download_path = os.path.join(args.input)
     download_data.download_data(args.participant, download_path)
     #preprocess data into single file
-    output_path = os.path.join(args.input, "../OutputCheck")
+    output_path = os.path.join(args.input, "../OutputCheck", args.participant)
     preprocessing.preprocess_data(args.input, output_path, args.participant)
 
     #load wrist data
@@ -105,6 +105,17 @@ def main(args):
 
 
         fig = px.line(countDf, x="Time", y="SampleCounts")
+        for index, non_wear_segment in non_wear_timestamps.iterrows():
+            fig.add_shape(type="rect",
+                          xref="x",
+                          yref="paper",
+                          x0=non_wear_segment["Start"],
+                          y0=0,
+                          x1=non_wear_segment["Stop"],
+                          y1=1,
+                          line=dict(color="rgba(0,0,0,0)", width=3, ),
+                          fillcolor="rgba(255,0,0,0.2)",
+                          layer='below')
         figures.append(
             html.Div([
                 html.H1(children='{} for {}'.format(sensor_name, args.participant)),
