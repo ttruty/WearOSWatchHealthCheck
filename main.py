@@ -42,16 +42,17 @@ parser.add_argument('rate', metavar='rate', type=int, nargs='?', const=20, defau
 def main(args):
     """
     Application entry point responsible for parsing command line requests
-    exaple command : python main.py D:\HABitsLab\WristDataChecks 511
+    exaple command : python main.py D:\HABitsLab\WristDataChecks 511 [port] [sample count]
     """
 
     reliability_dict = {}
 
     #download only new data
-    download_path = os.path.join(args.input)
-    download_data.download_data(args.participant, download_path)
+    #download_path = os.path.join(args.input)
+    #download_data.download_data(args.participant, download_path)
+
     #preprocess data into single file
-    output_path = os.path.join(args.input, "../OutputCheck", args.participant)
+    output_path = os.path.join(args.input, "../Aggregated", args.participant)
     preprocessing.preprocess_data(args.input, output_path, args.participant)
 
     #load wrist data
@@ -62,10 +63,12 @@ def main(args):
         gyro_files = [f for f in filenames if 'Gyro' in f]
         ppg_files = [f for f in filenames if 'PPG' in f]
 
+    # only one file for each sensor in path
     sensor_data = [accel_files[0], gyro_files[0], ppg_files[0]]
-    figures = []
-    count = 0
 
+    figures = []
+
+    count = 0
     print("Generating Figure")
     for csv_files in progressBar(sensor_data, prefix = 'Progress:', suffix = 'Complete', length = 50):
         # for sensor in sensor_data:
@@ -96,14 +99,12 @@ def main(args):
         recordedDataDf = countDf
         for index, non_wear_segment in non_wear_timestamps.iterrows():
             recordedDataDf = recordedDataDf[(recordedDataDf['Time'] < non_wear_segment["Start"]) | (recordedDataDf['Time'] > non_wear_segment["Stop"])]
-        # recordedDataDf = countDf.loc[countDf['Interpolated'] == 0]
 
         recordedDataDf.loc[recordedDataDf["SampleCounts"] > args.rate, "SampleCounts"] = args.rate
         recordedDataDf['Reliability'] = recordedDataDf['SampleCounts'] / args.rate
         reliability_dict[sensor_name] = recordedDataDf["Reliability"].mean()
 
-
-
+        # make plotly figure
         fig = px.line(countDf, x="Time", y="SampleCounts")
         for index, non_wear_segment in non_wear_timestamps.iterrows():
             fig.add_shape(type="rect",
@@ -127,11 +128,10 @@ def main(args):
             ])
         )
     app.layout = html.Div(children=figures)
-
     app.run_server(debug=False, port=args.port)
 
 
 if __name__ == '__main__':
-    # sys.argv = ['main.py', 'D:\\HABitsLab\\WristDataChecks\\511', '511']
+    # sys.argv = ['main.py', 'D:\\HABitsLab\\WristDataChecks\\511', '511'] # DEBUGGING
     args = parser.parse_args()
     main(args)

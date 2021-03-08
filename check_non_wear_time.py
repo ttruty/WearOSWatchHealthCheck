@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 import datetime
 
 def non_wear(df):
-    # Calculate non-wear time using std if 2 of 3 axes is less than target, point can be marked as non-wear point
-
+    # Calculate non-wear time label where sample counts are 0
     df["Non_Wear"] =  df['SampleCounts'] == 0
 
     # mask the blocks for wear and non_wear time
